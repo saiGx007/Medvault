@@ -1,0 +1,74 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  background: #f5f7fa;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: white;
+  padding: 30px 20px;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2563eb;
+  margin-bottom: 30px;
+}
+
+.sidebar p {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+/* Sidebar links (future use) */
+.sidebar-link {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  color: #374151;
+  font-size: 14px;
+}
+
+.sidebar-link:hover {
+  background: #f3f4f6;
+}
+
+/* Logout */
+.logout-btn {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #ef4444;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+}
+
+/* Main content */
+.main-content {
+  flex: 1;
+  padding: 40px;
+  background: #f9fafb;
+}
+
+/* Page title */
+.main-content h1 {
+  font-size: 26px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 25px;
+}
