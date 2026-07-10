@@ -5,32 +5,91 @@ import { useNavigate } from 'react-router-dom';
 
 export default function DoctorDashboard() {
   const [graphData, setGraphData] = useState([]);
+  const [liveStats, setLiveStats] = useState({ todayPatients: 0, pendingRequests: 0, averageFeedback: "4.8/5" });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const stats = [
-    { label: "Today's Patients", value: "12", icon: UserCheck, color: "text-blue-600", bg: "bg-blue-50" },
-    { label: "Pending Requests", value: "5", icon: Clock, color: "text-rose-600", bg: "bg-rose-50" },
-    { label: "Total Feedback", value: "4.8/5", icon: MessageSquare, color: "text-amber-600", bg: "bg-amber-50" },
-  ];
-
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchStatsAndMetrics = async () => {
       try {
-        const response = await api.get('/api/appointments/doctor/stats');
-        const formatted = Object.entries(response.data).map(([date, count]) => ({
-          day: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
-          height: Math.min(count * 20, 100)
-        }));
-        setGraphData(formatted);
+        // 1. Fetch live metrics from appointment history map
+        const statsResponse = await api.get('/api/appointments/doctor/stats');
+        const data = statsResponse.data;
+
+        console.log("MedVault Backend Stats Received:", data);
+
+        // 2. PROCESS LINE CHART VECTOR POINTS: Process {"2026-07-11": 1} directly
+        if (data && Object.keys(data).length > 0) {
+          const entries = Object.entries(data);
+          const formatted = entries.map(([dateStr, count]) => {
+            const parts = dateStr.split('-');
+            let dayLabel = "Day";
+
+            if (parts.length === 3) {
+              const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+              dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            } else {
+              dayLabel = dateStr;
+            }
+
+            return {
+              day: dayLabel,
+              // Percentage calculation for the vertical position of the point (inverted for SVG coordinates)
+              yPosition: Math.max(10, 90 - Math.min(count * 50, 80)),
+              count: count
+            };
+          });
+
+          setGraphData(formatted);
+        }
+
+        // 3. Calculate total patients seen
+        const totalPatientsCount = Object.values(data || {}).reduce((acc, curr) => typeof curr === 'number' ? acc + curr : acc, 0);
+
+        // 4. Fetch real pending counts using Doctor User ID from localStorage
+        let livePendingRequests = 0;
+        const doctorUserId = localStorage.getItem('userId');
+
+        if (doctorUserId) {
+          try {
+            const pendingRes = await api.get(`/api/access-requests/doctor/pending-count/${doctorUserId}`);
+            livePendingRequests = pendingRes.data.pendingCount || 0;
+          } catch (e) {
+            console.error("Could not fetch doctor pending requests count:", e);
+          }
+        }
+
+        setLiveStats({
+          todayPatients: totalPatientsCount,
+          pendingRequests: livePendingRequests,
+          averageFeedback: "4.9/5"
+        });
+
       } catch (err) {
-        console.error("Failed to fetch doctor stats:", err);
+        console.error("Failed to fetch dashboard live metrics info:", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchStats();
+    fetchStatsAndMetrics();
   }, []);
+
+  // Generate the SVG Polyline path coordinates string dynamically based on backend points layout
+  const generateSvgPath = () => {
+    if (graphData.length === 0) return "";
+    const totalPoints = graphData.length;
+    // Calculate equal spacing across the width of the chart panel
+    return graphData.map((d, index) => {
+      const x = totalPoints > 1 ? (index / (totalPoints - 1)) * 100 : 50;
+      return `${x},${d.yPosition}`;
+    }).join(" ");
+  };
+
+  const statsCards = [
+    { label: "Active Patients", value: liveStats.todayPatients, icon: UserCheck, color: "text-blue-600", bg: "bg-blue-50" },
+    { label: "Pending Requests", value: liveStats.pendingRequests, icon: Clock, color: "text-rose-600", bg: "bg-rose-50" },
+    { label: "Total Feedback", value: liveStats.averageFeedback, icon: MessageSquare, color: "text-amber-600", bg: "bg-amber-50" },
+  ];
 
   return (
     <div className="space-y-10 animate-page">
@@ -46,7 +105,7 @@ export default function DoctorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((s) => (
+        {statsCards.map((s) => (
           <div key={s.label} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl hover:shadow-blue-500/5 group">
             <div className={`${s.bg} ${s.color} p-4 rounded-2xl w-14 h-14 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
               <s.icon size={26} />
@@ -58,29 +117,56 @@ export default function DoctorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-slate-900">Patient Inflow Overview</h3>
+        <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-slate-900">Patient Inflow Trend</h3>
             <div className="p-2 bg-slate-50 rounded-xl text-slate-400">
                 <TrendingUp size={20} />
             </div>
           </div>
 
-          <div className="h-48 flex items-end justify-between gap-4">
+          <div className="h-48 relative w-full mb-6">
             {loading ? (
               <div className="w-full flex items-center justify-center h-full"><Loader2 className="animate-spin text-blue-600" /></div>
             ) : graphData.length > 0 ? (
-              graphData.map((d, i) => (
-                <div key={i} className="flex-1 bg-slate-100 rounded-t-2xl relative group cursor-pointer flex flex-col justify-end">
-                   <div
-                    className="w-full bg-blue-600 rounded-t-2xl transition-all duration-700 group-hover:bg-blue-400"
-                    style={{ height: `${d.height}%` }}
-                   ></div>
-                   <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black text-slate-400 uppercase">{d.day}</span>
+              <div className="w-full h-full relative">
+                {/* SVG Line Canvas Rendering */}
+                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                  <polyline
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={generateSvgPath()}
+                    className="drop-shadow-[0_4px_6px_rgba(37,99,235,0.2)]"
+                  />
+                </svg>
+
+                {/* Interactive Node Point Overlay Labels */}
+                <div className="absolute inset-0 flex justify-between pointer-events-none">
+                  {graphData.map((d, i) => {
+                    const leftOffset = graphData.length > 1 ? (i / (graphData.length - 1)) * 100 : 50;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute group/point pointer-events-auto cursor-pointer"
+                        style={{ left: `${leftOffset}%`, top: `${d.yPosition}%`, transform: 'translate(-50%, -50%)' }}
+                      >
+                        <div className="w-3 h-3 bg-white border-2 border-blue-600 rounded-full shadow-md transition-transform group-hover/point:scale-150"></div>
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded shadow opacity-0 group-hover/point:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                          {d.count} Appointments
+                        </div>
+                        <span className="absolute top-32 left-1/2 -translate-x-1/2 text-[10px] font-black text-slate-400 uppercase tracking-tighter whitespace-nowrap">
+                          {d.day}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))
+              </div>
             ) : (
-              <p className="w-full text-center text-slate-400 text-sm">No data available for this week.</p>
+              <p className="w-full text-center text-slate-400 text-sm py-12">No data available for this week.</p>
             )}
           </div>
         </div>

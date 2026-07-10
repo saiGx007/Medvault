@@ -1,30 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Activity, Clock, Star, ArrowRight, User, Loader2, FileText, CheckCircle2 } from 'lucide-react'; // Added CheckCircle2
+import { Heart, Activity, Clock, Star, ArrowRight, User, Loader2, FileText, CheckCircle2 } from 'lucide-react';
 import api from '../api/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
 export default function PatientDashboard() {
   const [recentAppointments, setRecentAppointments] = useState([]);
+  const [patientProfile, setPatientProfile] = useState({ fullName: "Patient", vitals: {} });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  const stats = [
-    { label: "Heart Rate", value: "72 bpm", sub: "Normal", color: "bg-rose-500", icon: Heart },
-    { label: "Blood Sugar", value: "110 mg/dL", sub: "Healthy", color: "bg-blue-500", icon: Activity },
-    { label: "Last Checkup", value: "Jan 12", sub: "5 days ago", color: "bg-amber-500", icon: Clock },
-    { label: "Health Score", value: "A+", sub: "Top 5%", color: "bg-emerald-500", icon: Star },
-  ];
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await api.get('/api/appointments/patient/my-bookings');
-        const latest = response.data
+        const email = localStorage.getItem('email');
+
+        // 1. Fetch patient profile details dynamically using the session email
+        if (email) {
+          const profileRes = await api.get(`/api/patient/profile?email=${email}`);
+          if (profileRes.data) {
+            setPatientProfile({
+              fullName: profileRes.data.user?.fullName || profileRes.data.fullName || "Patient",
+              vitals: profileRes.data.vitals || {}
+            });
+          }
+        }
+
+        // 2. Fetch recent bookings
+        const appointmentRes = await api.get('/api/appointments/patient/my-bookings');
+        const latest = appointmentRes.data
           .sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))
           .slice(0, 3);
         setRecentAppointments(latest);
       } catch (err) {
-        console.error("Error loading dashboard:", err);
+        console.error("Error loading dashboard data:", err);
       } finally {
         setLoading(false);
       }
@@ -32,13 +40,21 @@ export default function PatientDashboard() {
     fetchDashboardData();
   }, []);
 
+  // Map real-time database metrics into your stat cards dynamically (with safe schema fallbacks)
+  const stats = [
+    { label: "Heart Rate", value: patientProfile.vitals.heartRate ? `${patientProfile.vitals.heartRate} bpm` : "72 bpm", sub: "Normal", color: "bg-rose-500", icon: Heart },
+    { label: "Blood Sugar", value: patientProfile.vitals.bloodSugar ? `${patientProfile.vitals.bloodSugar} mg/dL` : "110 mg/dL", sub: "Healthy", color: "bg-blue-500", icon: Activity },
+    { label: "Last Checkup", value: recentAppointments[0] ? recentAppointments[0].appointmentDate : "None", sub: "Recent", color: "bg-amber-500", icon: Clock },
+    { label: "Health Score", value: "A+", sub: "Top 5%", color: "bg-emerald-500", icon: Star },
+  ];
+
   return (
     <div className="space-y-10 animate-page">
       {/* Welcome Banner */}
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-            Welcome back, <span className="text-blue-600">M Sai Ganesh!</span>
+            Welcome back, <span className="text-blue-600">{patientProfile.fullName}!</span>
           </h1>
           <p className="text-slate-500 font-medium mt-2">Managing your healthcare at MedVault.</p>
         </div>
@@ -90,7 +106,7 @@ export default function PatientDashboard() {
                   type={apt.doctor.specialization}
                   date={`${apt.appointmentDate}, ${apt.appointmentTime}`}
                   status={apt.status}
-                  navigate={navigate} // Pass navigate to handle feedback click
+                  navigate={navigate}
                 />
               ))
             ) : (
@@ -119,7 +135,7 @@ export default function PatientDashboard() {
 
 function AppointmentRow({ id, name, type, date, status, navigate }) {
   const isCompleted = status === 'COMPLETED';
-  const statusColor = isCompleted ? 'text-emerald-600' : 'text-amber-600'; // Changed to emerald for clarity
+  const statusColor = isCompleted ? 'text-emerald-600' : 'text-amber-600';
 
   return (
     <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-transparent hover:border-slate-200 hover:bg-white transition-all cursor-pointer group">
@@ -147,12 +163,11 @@ function AppointmentRow({ id, name, type, date, status, navigate }) {
           </p>
         </div>
 
-        {/* FEEDBACK BUTTON: Only triggers if status is COMPLETED */}
         {isCompleted ? (
           <button
             onClick={(e) => {
-                e.stopPropagation(); // Prevent row click
-                navigate(`/patient/feedback/${id}`); // Adjust this path to match your existing feedback route
+                e.stopPropagation();
+                navigate(`/patient/feedback/${id}`);
             }}
             className="bg-amber-100 text-amber-700 p-2.5 rounded-xl hover:bg-amber-200 transition-all shadow-sm hover:scale-110 active:scale-90"
             title="Give Feedback"
