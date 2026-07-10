@@ -8,7 +8,7 @@ import com.saigana.medvault.dto.LoginRequest;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "https://medvault-ljgmunfga-sai-gx007.vercel.app", allowCredentials = "true")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AuthController {
 
     @Autowired
