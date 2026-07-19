@@ -56,7 +56,8 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:5173",
                 "https://*.vercel.app",
-                "https://medvault-*-sai-gx007.vercel.app"
+                "https://medvault-*-sai-gx007.vercel.app",
+                "https://medvault-wine.vercel.app"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept"));
